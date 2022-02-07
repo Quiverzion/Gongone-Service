@@ -3,6 +3,8 @@ from discord.ext import commands
 from keep_alive import keep_alive
 from replit import db
 import random
+import os
+
 
 def find_account_for_id(account_id):
   for key in db.keys():
@@ -245,7 +247,8 @@ async def chat_clean(ctx, amount: int):
   await ctx.message.delete()
   await ctx.channel.purge(limit=amount)
 
+
 keep_alive()
 
-def running(token):
-  bot.run(token)
+
+bot.run(os.environ["token"])
