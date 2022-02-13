@@ -1,254 +1,116 @@
 import discord
-from discord.ext import commands
-from keep_alive import keep_alive
-from replit import db
+from discord.ext import commands, tasks
 import random
-import os
-
-
-def find_account_for_id(account_id):
-  for key in db.keys():
-    if key == account_id:
-      return True
-  return False
-
-
-def find_account_for_user(user_id):
-  values = []
-  for key, value in db.items():
-    if value[1] == user_id:
-      values.append(key)
-  return values
-
-
-def security(id):
-  managerId = [762202105451773965]
-  for i in range(len(managerId)):
-    if id == managerId[i]:
-      return True
-  return False
-
-
-def conversion(m, p=0):
-  if p == 1:
-    buho = '+ '
-  elif p == -1:
-    buho = '- '
-  else:
-    buho = ''
-  m = int(m)
-  if m // 10000 != 0:
-    if m % 10000 == 0:
-      return f'{buho}{m // 10000}만 코인'
-    else:
-      return f'{buho}{m // 10000}만 {m % 10000} 코인'
-  else:
-    return f'{buho}{m} 코인'
-
+import Project_manager
 
 bot = commands.Bot(command_prefix=';',
                    status=discord.Status.online, intents=discord.Intents.all())
 
+pm_data = Project_manager.data()
+
+
+def convertion(num: int):
+    if num >= 100000000:
+        if num % 100000000//10000 == 0:
+            return f"{num//100000000}억 코인"
+        else:
+            return f"{num//100000000}억 {num%100000000//10000}만 코인"
+    elif num >= 10000:
+        if num % 10000 == 0:
+            return f"{num//10000}만 코인"
+        else:
+            return f"{num//10000}만 {num%10000}코인"
+    else:
+        return f"{num}코인"
+
+
+async def service_join(user_id: int):
+    d = pm_data.data_get()
+    for key in d:
+        if key == f"User:{user_id}":
+            return False
+    d[f"User:{user_id}"] = {"money": 0, "stocks": {"ChunbaeStock": 0, "BirdMusic": 0,
+                                                   "MarsCoin": 0, "SeojunCoin": 0}, "exp": 0, "is_smtm": False, "role": 0}
+    pm_data.data_set(d)
+    return True
+
+
+async def set_money(user_id: int, num: int):
+    d = pm_data.data_get()
+    for key in d:
+        if key == f"User:{user_id}":
+            return False
+    d[f"User:{user_id}"]["money"] = num
+    pm_data.data_set(d)
+    return True
+
 
 @bot.event
 async def on_ready():
-  print(f'Gongone.Service: Pay Script Runned on [{bot.user}]')
+    print(f'Gongone.Service: Pay Script Runned on [{bot.user}]')
+    stocks.start()
 
 
-@bot.command(aliases=["가입", "ㄱㅇ", "rd"])
-async def sign_in(ctx):
-  if find_account_for_user(ctx.author.id) != []:
-    await ctx.send("이미 가입되어있어요!", reference=ctx.message)
-  else:
-    account_id = random.randint(1000, 9999)
-    while find_account_for_id(f"GSOA:{account_id}"):
-      account_id = random.randint(1000, 9999)
-    db[f"GSOA:{account_id}"] = [100000, ctx.author.id]
-    await ctx.send(f"가입되었어요, 선물이에요.\n`{conversion(100000, 1)}`", reference=ctx.message)
-
-
-@bot.command(aliases=["계좌", "ㄱㅈ", "rw", "돈", "ㄷ", "e"])
-async def pay(ctx, id: str = "me"):
-  if id == "me":
-    id = find_account_for_user(ctx.author.id)[0]
-    target_value = db[id]
-  elif find_account_for_id(id):
-    target_value = db[id]
-  else:
-    await ctx.send("유효하지 않은 계좌아이디예요!", reference=ctx.message)
-    return
-
-  embed = discord.Embed(title="Gongone Pay 계좌정보")
-  embed.add_field(name="금액", value=conversion(target_value[0]), inline=True)
-  embed.add_field(name="소유자", value=str(
-      bot.get_user(target_value[1])), inline=True)
-  embed.add_field(name="아이디", value=str(id), inline=True)
-  embed.set_footer(text=f"{ctx.author} | Made by Choi Kang",
-                   icon_url=str(ctx.author.avatar_url))
-  await ctx.send(embed=embed, reference=ctx.message)
-
-
-@bot.command(aliases=["도박", "ㄷㅂ", "eq"])
-async def gamble(ctx, value: int):
-  if find_account_for_user(ctx.author.id) == []:
-    await ctx.send("계좌를 생성해야해요, `;가입` 으로 계좌를 생성해주세요.", reference=ctx.message)
-    return
-  else:
-    id = find_account_for_user(ctx.author.id)[0]
-    if db[id][0] < value:
-      await ctx.send("베팅할 금액이 너무 커요!", reference=ctx.message)
-      return
-    if value < 500:
-      await ctx.send(f"베팅할 금액이 너무 작아요, 최소 베팅금액은 `{conversion(500)}` 입니다!", reference=ctx.message)
-      return
-
-  percent = random.randint(1, 20)
-  if percent > 9:
-    percent = random.randint(1, 10)
-    if percent != 1:
-      tasks = 4
+@tasks.loop(seconds=1)
+async def stocks():
+    d = pm_data.secrets_get()
+    x = d["stocks"]["seconds"]
+    sjc = d["stocks"]["SeojunCoin"][0]
+    if x >= 30:
+        x = 1
+        d["stocks"]["SeojunCoin"][1] = sjc
+        if sjc <= 100:
+            sjc += random.randint(0, 100)
+        else:
+            sjc += random.randint(-80, 80)
     else:
-      tasks = 5
-  else:
-    percent = random.randint(1, 10)
-    if percent != 1:
-      tasks = 1
+        x += 1
+    d["stocks"]["seconds"] = x
+    d["stocks"]["SeojunCoin"][0] = sjc
+    pm_data.secrets_set(d)
+
+
+@bot.command(aliases=["계좌", "지갑", "돈", "ㄱㅈ", "ㅈㄱ", "ㄷ", "rw", "wr", "e"])
+async def show_money(ctx):
+    await service_join(ctx.author.id)
+    data = pm_data.data_get()
+    embed = discord.Embed(title="Gongone Pay 지갑정보")
+    d = convertion(data[f"User:{ctx.author.id}"]["money"])
+    embed.add_field(name="소지금액", value=f"{d}")
+    embed.set_footer(text=f"{ctx.author} | {ctx.author.id}",
+                     icon_url=ctx.author.avatar.url)
+    if data[f"User:{ctx.author.id}"]["stocks"]["SeojunCoin"] > 0:
+        SJC = data[f"User:{ctx.author.id}"]["stocks"]["SeojunCoin"]
+        embed.add_field(name="서준코인", value=f"{SJC}개", inline=False)
+    await ctx.send(embed=embed, reference=ctx.message)
+
+
+def inf_stocks(stocks_name: str):
+    d = pm_data.secrets_get()["stocks"][stocks_name]
+    if d[0] - d[1] > 0:
+        return f"```diff\n+  {d[0]}  ▲ {d[0] - d[1]}```"
+    if d[0] - d[1] < 0:
+        return f"```diff\n-  {d[0]}  ▼ {abs(d[0] - d[1])}```"
+    if d[0] - d[1] == 0:
+        return f"```diff\n   {d[0]}    {abs(d[0] - d[1])}```"
+
+
+@bot.command(aliases=["주식", "코인", "ㅈㅅ", "ㅋㅇ", "wt", "zd"])
+async def show_stocks(ctx):
+    await service_join(ctx.author.id)
+    data = pm_data.secrets_get()
+    embed = discord.Embed(title="Gongone Pay 주식차트")
+    embed.add_field(name="춘배증권", value=inf_stocks(
+        "ChunbaeStock"), inline=False)
+    embed.add_field(name="버드뮤직", value=inf_stocks("BirdMusic"), inline=False)
+    embed.add_field(name="쵝앙코인", value=inf_stocks("MarsCoin"), inline=False)
+    embed.add_field(name="서준코인", value=inf_stocks("SeojunCoin"), inline=False)
+    t = data["stocks"]["seconds"]
+    if t == 30:
+        embed.set_footer(text=f"지금 변동됨")
     else:
-      percent = random.randint(1, 4)
-      if percent != 1:
-        tasks = 2
-      else:
-        tasks = 3
-
-  if tasks == 1:  # +베팅금액의 2배
-    db[id][0] += value
-    await ctx.send(f"축하해요, 2배로 성공했어요!\n`{conversion(value, 1)}`", reference=ctx.message)
-  elif tasks == 2:  # +베팅금액의 3배
-    value *= 2
-    db[id][0] += value
-    await ctx.send(f"부럽네요, 3배로 성공했어요!\n`{conversion(value, 1)}`", reference=ctx.message)
-  elif tasks == 3:  # +베팅금액의 5배
-    value *= 4
-    db[id][0] += value
-    if value >= 1000000:
-      text = "어케했냐;;"
-    else:
-      text = "어..? 5배로 성공했어요!"
-    await ctx.send(f"{text}\n`{conversion(value, 1)}`", reference=ctx.message)
-  elif tasks == 4:  # -베팅금액
-    db[id][0] -= value
-    if value >= 100000:
-      a = random.randint(1, 3)
-      if a == 1:
-        text = "음..! 정말 맛있네요.."
-      if a == 2:
-        text = "잘 먹었어요."
-      if a == 3:
-        text = "하하, 고마워요."
-    else:
-      a = random.randint(1, 3)
-      if a == 1:
-        text = "아쉽네요..!"
-      if a == 2:
-        text = "아앗.."
-      if a == 3:
-        text = "실패했네요.."
-    await ctx.send(f"{text}\n`{conversion(value, -1)}`", reference=ctx.message)
-  elif tasks == 5:  # -베팅금액의 반
-    value //= 2
-    db[id][0] -= value
-    await ctx.send(f"실패..했지만 베팅금액의 반은 돌려드릴게요.\n`{conversion(value, -1)}`", reference=ctx.message)
+        embed.set_footer(text=f"다음 변동: {30-t}초 후")
+    await ctx.send(embed=embed, reference=ctx.message)
 
 
-@bot.command(aliases=["코인받기", "ㅋㅇㅂㄱ", "rdqr", "돈받기", "ㄷㅂㄱ", "eqr"])
-async def get_coin(ctx):
-  if find_account_for_user(ctx.author.id) == []:
-    await ctx.send("계좌를 생성해야해요, `;가입` 으로 계좌를 생성해주세요.", reference=ctx.message)
-    return
-
-  id = find_account_for_user(ctx.author.id)[0]
-  if db[id][0] > 10000:
-    await ctx.send(f"`;코인받기` 는 보유금액이 `{conversion(10000)}`이하일때만 사용가능해요!", reference=ctx.message)
-    return
-
-  present_coin = random.randint(100, 250)*100
-  db[id][0] += present_coin
-  await ctx.send(f"선물이에요.\n`{conversion(present_coin, 1)}`", reference=ctx.message)
-
-
-@bot.command(aliases=["올인", "ㅇㅇ", "dd"])
-async def gamble_all_in(ctx):
-  if find_account_for_user(ctx.author.id) == []:
-    await ctx.send("계좌를 생성해야해요, `;가입` 으로 계좌를 생성해주세요.", reference=ctx.message)
-    return
-  id = find_account_for_user(ctx.author.id)[0]
-  await gamble(ctx, db[id][0])
-
-
-@bot.command(aliases=["하프", "ㅎㅍ", "gv"])
-async def gamble_half(ctx):
-  if find_account_for_user(ctx.author.id) == []:
-    await ctx.send("계좌를 생성해야해요, `;가입` 으로 계좌를 생성해주세요.", reference=ctx.message)
-    return
-  id = find_account_for_user(ctx.author.id)[0]
-  await gamble(ctx, db[id][0] // 2)
-
-
-@bot.command(aliases=["돈복사", "ㄷㅂㅅ", "ㄷㅄ", "eqt"])
-async def money_copy(ctx, amount: int):
-  if find_account_for_user(ctx.author.id) == []:
-    await ctx.send("계좌를 생성해야해요, `;가입` 으로 계좌를 생성해주세요.", reference=ctx.message)
-    return
-  if security(ctx.author.id) == False:
-    await ctx.send("어..어라? 프린터기가 고장났네요..", reference=ctx.message)
-    return
-
-  id = find_account_for_user(ctx.author.id)[0]
-  db[id][0] += amount
-  embed = discord.Embed(title="복사한 돈을 전송했어요!", description="행복하시겠네요..")
-  embed.add_field(name="복사한 금액", value=str(conversion(amount)))
-  embed.add_field(name="전송계좌", value=str(id))
-  embed.set_footer(text=f"{ctx.author} | Made by Choi Kang",
-                   icon_url=str(ctx.author.avatar_url))
-  await ctx.send(embed=embed, reference=ctx.message)
-
-
-@bot.command()
-async def data_show(ctx):
-  if security(ctx.author.id) == False:
-    return
-
-  await ctx.send(str(list(db.keys())))
-
-
-@bot.command()
-async def data_delete(ctx, key: str):
-    if security(ctx.author.id) == False:
-        return
-
-    del db[key]
-    await ctx.send(f"Deleted data: key:{key}")
-
-
-@bot.command()
-async def data_set(ctx, key: str, amount: int):
-  if security(ctx.author.id) == False:
-    return
-
-  db[key][0] = amount
-  await ctx.send(f"Set data: [{key}] to [{amount}]")
-
-
-@bot.command(aliases=["청소", "ㅊㅅㄴ", "cts"])
-async def chat_clean(ctx, amount: int):
-  if security(ctx.author.id) == False:
-    return
-
-  await ctx.message.delete()
-  await ctx.channel.purge(limit=amount)
-
-
-keep_alive()
-
-
-bot.run(os.environ["token"])
+bot.run(pm_data.secrets_get()["tokens"]["Gongone_pay"])
